@@ -1,0 +1,273 @@
+function reloadDropConfig():
+    load yaml "plugins/drop/config.yml" as "drop.config"
+    loop all yaml nodes from "drop.config":
+        set {drop::config::%loop-value%} to yaml value loop-value from "drop.config"
+    set {drop::config::drops-for-guild::*} to yaml list "drops-for-guild" from "drop.config"
+    unload yaml "drop.config"
+
+function reloadDropMessages():
+    load yaml "plugins/drop/messages.yml" as "drop.messages"
+    loop all yaml node from "drop.messages":
+        set {drop::messages::%loop-value%} to yaml value loop-value from "drop.messages"
+    unload yaml "drop.messages"
+
+function reloadDropDrops():
+    load yaml "plugins/drop/drops.yml" as "drop.drops"
+    clear {drop::drops::amount}
+    loop yaml node keys "drops" from "drop.drops":
+        set {drop::drops::%loop-value%::itemtype} to yaml value "drops.%loop-value%.itemtype" from "drop.drops" parsed as itemtype
+        set {drop::drops::%loop-value%::chance} to yaml value "drops.%loop-value%.chance" from "drop.drops"
+        set {drop::drops::%loop-value%::fortune} to yaml value "drops.%loop-value%.fortune" from "drop.drops"
+        set {drop::drops::%loop-value%::guiName} to yaml value "drops.%loop-value%.guiName" from "drop.drops"
+        set {drop::drops::%loop-value%::vipBoost} to yaml value "drops.%loop-value%.vipBoost" from "drop.drops"
+        set {drop::drops::%loop-value%::chatLang} to yaml value "drops.%loop-value%.chatLang" from "drop.drops"
+        set {drop::drops::%loop-value%::chatColor} to yaml value "drops.%loop-value%.chatColor" from "drop.drops"
+        add 1 to {drop::drops::amount}
+    unload yaml "drop.drops"
+
+function openDropGui(p: player, gui: boolean):
+    set {_r} to rounded up {drop::drops::amount} / 9 +2
+    if {_r} > 6:
+        set {_r} to 6
+    set {_m} to {_r} * 9 -1
+    if {_gui} is true:
+        open chest inventory with {_r} rows named {drop::config::drop-gui-name} to {_p}
+    if {drop::config::drop-fill-gui-glass-pane} is true:
+        set slot (integers between 0 and {_m}) of {_p}'s current inventory to black glass pane named " "
+    set {_slot} to 0
+    loop {drop::drops::amount} times:
+        set slot {_slot} of {_p}'s current inventory to {drop::drops::%loop-value%::itemtype} named {drop::drops::%loop-value%::guiName}
+        add "  &8► &7Szansa: &e%{drop::drops::%loop-value%::chance}%%%" to slot {_slot} of {_p}'s current inventory's lore
+        if {drop::drops::%loop-value%::fortune} is false:
+            set {_f} to "&c&l✘"
+        else:
+            set {_f} to "&a&l✔"
+        add "  &8► &7Fortune: &e%{_f}%" to slot {_slot} of {_p}'s current inventory's lore
+        if {drop::drops::%loop-value%::vipBoost} is false:
+            set {_f} to "&c&l✘"
+        else:
+            set {_f} to "&a&l✔"
+        add "  &8► &7Bonus dla &6VIP&7: &e%{_f}%" to slot {_slot} of {_p}'s current inventory's lore
+        if {drop::drops::%loop-value%::vipBoost} is true:
+            add "   &8► &e+%{drop::config::drop-vip-multiplier}%%% &6do dropu" to slot {_slot} of {_p}'s current inventory's lore
+        if {drop::cache::%loop-value%::%{_p}%::status} is not set:
+            set {_f} to "&a&l✔"
+        else:
+            set {_f} to "&c&l✘"
+        add " " and "  &8► &7Status: %{_f}%" to slot {_slot} of {_p}'s current inventory's lore
+        set {_l} to {drop::cache::%loop-value%::%{_p}%::amount}
+        if {drop::cache::%loop-value%::%{_p}%::amount} is not set:
+            set {_l} to 0
+        if {drop::config::drop-display-amount} is true:
+            set {_formatting::*} to split {drop::drops::%loop-value%::chatLang} at "/"
+            if {_l} is 0:
+                set {_f} to {_formatting::3}
+            else if {_l} is 1:
+                set {_f} to {_formatting::1}
+            else if {_l} is between 2 and 4:
+                set {_f} to {_formatting::2}
+            else if {_l} > 4:
+                set {_f} to {_formatting::3}
+            add "   &8► &7Wykopano: %{drop::drops::%loop-value%::chatColor}%%{_l}% %{_f}%" to slot {_slot} of {_p}'s current inventory's lore
+        add 1 to {_slot}
+    set {_lastSlot} to {_r} * 9
+    set slot {_lastSlot} -1 of {_p}'s current inventory to cobblestone named {drop::config::cobblestone-gui-name}
+    if {drop::cache::cobblestone::%{_p}%::status} is not set:
+        add "  &8► &7Status: &a&l✔" to slot {_lastSlot} -1 of {_p}'s current inventory's lore
+    else:
+        add "  &8► &7Status: &c&l✘" to slot {_lastSlot} -1 of {_p}'s current inventory's lore
+    set slot {_lastSlot} -2 of {_p}'s current inventory to hopper named {drop::config::toEq-gui-name}
+    if {drop::cache::toEq::%{_p}%::status} is not set:
+        add "  &8► &7Status: &a&l✔" to slot {_lastSlot} -2 of {_p}'s current inventory's lore
+    else:
+        add "  &8► &7Status: &c&l✘" to slot {_lastSlot} -2 of {_p}'s current inventory's lore
+    set slot {_lastSlot} -3 of {_p}'s current inventory to paper named {drop::config::message-gui-name}
+    if {drop::cache::message::%{_p}%::status} is not set:
+        add "  &8► &7Status: &a&l✔" to slot {_lastSlot} -3 of {_p}'s current inventory's lore
+    else:
+        add "  &8► &7Status: &c&l✘" to slot {_lastSlot} -3 of {_p}'s current inventory's lore
+    set slot {_lastSlot} -7 of {_p}'s current inventory to yellow clay named {drop::config::enable-only-drops-for-guild} with lore "  &7(Kliknij, aby wykonać!)"
+    set slot {_lastSlot} -8 of {_p}'s current inventory to red clay named {drop::config::disable-all-drops-gui-name} with lore "  &7(Kliknij, aby wykonac!)"
+    set slot {_lastSlot} -9 of {_p}'s current inventory to green clay named {drop::config::enable-all-drops-gui-name} with lore "  &7(Kliknij, aby wykonac!)"
+
+on load:
+    if yaml file "plugins/drop/config.yml" doesn't exist:
+        load yaml "plugins/drop/config.yml" as "drop.config"
+        set yaml value "drop-status" from "drop.config" to true
+        set the comments of yaml node "drop-status" from "drop.config" to "Czy drop ma być włączony?"
+        set yaml value "drop-gui-name" from "drop.config" to "&8✦ &3Drop z stone"
+        set the comments of yaml node "drop-gui-name" from "drop.config" to "Jak ma wyglądać nazwa GUI z dropem?"
+        set yaml value "drop-fill-gui-glass-pane" from "drop.config" to true
+        set the comments of yaml node "drop-fill-gui-glass-pane" from "drop.config" to "Czy w GUI puste miejsca mają być wypełnione szybami?"
+        set yaml value "drop-vip-multiplier" from "drop.config" to 1.25
+        set the comments of yaml node "drop-vip-multiplier" from "drop.config" to "Ile procent ma dodatkowo osoba z permisją (drop.vip)?"
+        set yaml value "drop-display-amount" from "drop.config" to true
+        set the comments of yaml node "drop-display-amount" from "drop.config" to "Czy ma wyświetlać liczbę wykopanego surowca?"
+        set yaml value "fortune-1-min" from "drop.config" to 1
+        set yaml value "fortune-1-max" from "drop.config" to 2
+        set yaml value "fortune-2-min" from "drop.config" to 2
+        set yaml value "fortune-2-max" from "drop.config" to 3
+        set yaml value "fortune-3-min" from "drop.config" to 2
+        set yaml value "fortune-3-max" from "drop.config" to 4
+        set the comments of yaml node "fortune-1-min" from "drop.config" to "W jakiej ilości ma dropić przedmiot z fortune?"
+        set yaml value "cobblestone-gui-name" from "drop.config" to "&8✦ &7Cobblestone"
+        set the comments of yaml node "cobblestone-gui-name" from "drop.config" to "Jak ma wyglądać zarządzanie cobblem w GUI?"
+        set yaml value "toEq-gui-name" from "drop.config" to "&8✦ &6Drop do EQ"
+        set the comments of yaml node "toEq-gui-name" from "drop.config" to "Jak ma wyglądać zarządzanie dropem do EQ w GUI?"
+        set yaml value "message-gui-name" from "drop.config" to "&8✦ &fPowiadomienia o dropie"
+        set the comments of yaml node "message-gui-name" from "drop.config" to "Jak ma wyglądać zarządzanie powiadomieniami w GUI?"
+        set yaml value "enable-all-drops-gui-name" from "drop.config" to "&8✦ &aWłącz wszystkie dropy"
+        set the comments of yaml node "enable-all-drops-gui-name" from "drop.config" to "Jak ma wyglądać włączanie wszystkich dropów w GUI?"
+        set yaml value "disable-all-drops-gui-name" from "drop.config" to "&8✦ &cWyłącz wszystkie dropy"
+        set the comments of yaml node "disable-all-drops-gui-name" from "drop.config" to "Jak ma wyglądać wyłączanie wszystkich dropów w GUI?"
+        set yaml value "enable-only-drops-for-guild" from "drop.config" to "&8✦ &eWłącz tylko przedmioty na gildie"
+        set the comments of yaml node "enable-only-drops-for-guild" from "drop.config" to "Jak ma wyglądać włączanie przedmiotów tylko na gildie w GUI?"
+        set yaml list "drops-for-guild" from "drop.config" to "1" and "2" and "3"
+        set the comments of yaml node "drops-for-guild" from "drop.config" to "Jakie dropy mają być włączone w opcji ""tylko na gildie""?"
+        save yaml "drop.config"
+        unload yaml "drop.config"
+    if yaml file "plugins/drop/messages.yml" doesn't exist:
+        load yaml "plugins/drop/messages.yml" as "drop.messages"
+        set yaml value "drop-status-message" from "drop.messages" to "&8✦ &cDrop jest wyłączony!"
+        set yaml value "drop-chat-message" from "drop.messages" to "&8✦ &7Wydobyłeś: {COLOR}x{AMOUNT} {LANG}&7!"
+        save yaml "drop.messages"
+        unload yaml "drop.messages"
+    if yaml file "plugins/drop/drops.yml" doesn't exist:
+        load yaml "plugins/drop/drops.yml" as "drop.drops"
+        set yaml value "drops.1.itemtype" from "drop.drops" to "diamond"
+        set yaml value "drops.1.chance" from "drop.drops" to 10
+        set yaml value "drops.1.fortune" from "drop.drops" to true
+        set yaml value "drops.1.guiName" from "drop.drops" to "&8✦ &bDiament"
+        set yaml value "drops.1.vipBoost" from "drop.drops" to true
+        set yaml value "drops.1.chatLang" from "drop.drops" to "diament/diamenty/diamentów"
+        set yaml value "drops.1.chatColor" from "drop.drops" to "&b"
+        set the comments of yaml node "drops" from "drop.drops" to "    '1':    <- kolejność dropu" and "        itemtype: diamond    <- itemek który dropi i jest w gui" and "        chance: 10    <- szansa na drop" and "        fortune: true    <- czy fortune ma być włączona" and "        guiName: ""&8✦ &bDiament""    <- wygląd przedmiotu w gui" and "        vipBoost: true    <- czy osoba z permisją drop.vip ma mieć dodatkowy procent dla tego przedmiotu?" and "        chatLang: diament/diamenty/diamentów    <- wygląd na chacie, 1 diament, 2 diamenty, 5 diamentów" and "        chatColor: ""&b""    <- jak ma wyglądać nazwa przedmiotu na chacie?"
+        save yaml "drop.drops"
+        unload yaml "drop.drops"
+    reloadDropConfig()
+    reloadDropMessages()
+    reloadDropDrops()
+
+command /drop [<text>]:
+    trigger:
+        if {drop::config::drop-status} is false:
+            send {drop::messages::drop-status-message}
+            stop
+        set {_r} to rounded up {drop::drops::amount} / 9 +2
+        if {_r} > 6:
+            set {_r} to 6
+        openDropGui(player, true)
+
+on inventory click:
+    if name of player's current inventory is {drop::config::drop-gui-name}:
+        if clicked inventory is not player's inventory:
+            cancel event
+            if {drop::drops::amount} is 0:
+                stop
+            set {_lastSlot} to {drop::drops::amount} -1
+            set {_r} to rounded up {drop::drops::amount} / 9 +2
+            if {_r} > 6:
+                set {_r} to 6
+            set {_lastGuiSlot} to {_r} * 9
+            if index of clicked slot is between 0 and {_lastSlot}:
+                set {_id} to index of clicked slot +1
+                if {drop::cache::%{_id}%::%player%::status} is not set:
+                    set {drop::cache::%{_id}%::%player%::status} to false
+                    openDropGui(player, false)
+                    stop
+                else:
+                    clear {drop::cache::%{_id}%::%player%::status}
+                    openDropGui(player, false)
+                    stop
+            if index of clicked slot is {_lastGuiSlot} -1:
+                if {drop::cache::cobblestone::%player%::status} is not set:
+                    set {drop::cache::cobblestone::%player%::status} to false
+                    openDropGui(player, false)
+                    stop
+                else:
+                    clear {drop::cache::cobblestone::%player%::status}
+                    openDropGui(player, false)
+                    stop
+            if index of clicked slot is {_lastGuiSlot} -2:
+                if {drop::cache::toEq::%player%::status} is not set:
+                    set {drop::cache::toEq::%player%::status} to false
+                    openDropGui(player, false)
+                    stop
+                else:
+                    clear {drop::cache::toEq::%player%::status}
+                    openDropGui(player, false)
+                    stop
+            if index of clicked slot is {_lastGuiSlot} -3:
+                if {drop::cache::message::%player%::status} is not set:
+                    set {drop::cache::message::%player%::status} to false
+                    openDropGui(player, false)
+                    stop
+                else:
+                    clear {drop::cache::message::%player%::status}
+                    openDropGui(player, false)
+                    stop
+            if index of clicked slot is {_lastGuiSlot} -7:
+                loop {drop::drops::amount} times:
+                    set {drop::cache::%loop-value%::%player%::status} to false
+                loop {drop::config::drops-for-guild::*}:
+                    clear {drop::cache::%loop-value%::%player%::status}
+                openDropGui(player, false)
+                stop
+            if index of clicked slot is {_lastGuiSlot} -8:
+                loop {drop::drops::amount} times:
+                    set {drop::cache::%loop-value%::%player%::status} to false
+                openDropGui(player, false)
+                stop
+            if index of clicked slot is {_lastGuiSlot} -9:
+                loop {drop::drops::amount} times:
+                    clear {drop::cache::%loop-value%::%player%::status}
+                openDropGui(player, false)
+                stop
+
+on mine of stone:
+    if player's gamemode is survival:
+        if {drop::cache::cobblestone::%player%::status} is not set:
+            if {drop::cache::toEq::%player%::status} is not set:
+                cancel drops
+                if player can hold 1 of cobblestone:
+                    give 1 of cobblestone to player
+                else:
+                    drop 1 of cobblestone at player
+        else if {drop::cache::cobblestone::%player%::status} is false:
+            cancel drops
+        loop {drop::drops::amount} times:
+            set {_chance} to {drop::drops::%loop-value%::chance}
+            if {drop::drops::%loop-value%::vipBoost} is true:
+                if player have permission "drop.vip":
+                    add {drop::config::drop-vip-multiplier} to {_chance}
+            if {drop::cache::%loop-value%::%player%::status} is not set:
+                chance of {_chance}%:
+                    set {_i} to 1
+                    if {drop::drops::%loop-value%::fortune} is true:
+                        if (level of fortune of player's tool) is 1:
+                            set {_i} to random integer between {drop::config::fortune-1-min} and {drop::config::fortune-1-max}
+                        else if (level of fortune of player's tool) is 2:
+                            set {_i} to random integer between {drop::config::fortune-2-min} and {drop::config::fortune-2-max}
+                        else if (level of fortune of player's tool) is 3:
+                            set {_i} to random integer between {drop::config::fortune-3-min} and {drop::config::fortune-3-max}
+                    if {drop::cache::toEq::%player%::status} is not set:
+                        if player can hold {_i} of {drop::drops::%loop-value%::itemtype}:
+                            give {_i} of {drop::drops::%loop-value%::itemtype} to player
+                        else:
+                            drop {_i} of {drop::drops::%loop-value%::itemtype} at player
+                    else:
+                        drop {_i} of {drop::drops::%loop-value%::itemtype} at player
+                    add {_i} to {drop::cache::%loop-value%::%player%::amount}
+                    set {_formatting::*} to split {drop::drops::%loop-value%::chatLang} at "/"
+                    if {_i} is 1:
+                        set {_f} to {_formatting::1}
+                    else if {_i} is between 2 and 4:
+                        set {_f} to {_formatting::2}
+                    else if {_i} > 4:
+                        set {_f} to {_formatting::3}
+                    if {drop::cache::message::%player%::status} is not set:
+                        set {_msg} to {drop::messages::drop-chat-message}
+                        replace all "{COLOR}" with {drop::drops::%loop-value%::chatColor} in {_msg}
+                        replace all "{AMOUNT}" with "%{_i}%" in {_msg}
+                        replace all "{LANG}" with "%{_f}%" in {_msg}
+                        send {_msg} to player
