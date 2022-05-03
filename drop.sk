@@ -1,3 +1,25 @@
+function convertTime(t: number) :: text:
+    set {_idays} to ""
+    set {_ihours} to ""
+    set {_iminutes} to ""
+    set {_iseconds} to ""
+    set {_days} to rounded down {_t} / 86400
+    remove 86400 * {_days} from {_t}
+    set {_hours} to rounded down {_t} / 3600
+    remove 3600 * {_hours} from {_t}
+    set {_minutes} to rounded down {_t} / 60
+    remove 60 * {_minutes} from {_t}
+    if {_days} is not 0:
+        set {_idays} to "%{_days}% dni "
+    if {_hours} is not 0:
+        set {_ihours} to "%{_hours}% godzin "
+    if {_minutes} is not 0:
+        set {_iminutes} to "%{_minutes}% minut "
+    if {_t} is not 0:
+        set {_iseconds} to "%{_t}% sekund"
+    set {_time} to "%{_idays}%%{_ihours}%%{_iminutes}%%{_iseconds}%"
+    return {_time}
+
 function reloadDropConfig():
     load yaml "plugins/drop/config.yml" as "drop.config"
     loop all yaml nodes from "drop.config":
@@ -90,6 +112,18 @@ function openDropGui(p: player, gui: boolean):
     set slot {_lastSlot} -8 of {_p}'s current inventory to red clay named {drop::config::disable-all-drops-gui-name} with lore "  &7(Kliknij, aby wykonac!)"
     set slot {_lastSlot} -9 of {_p}'s current inventory to green clay named {drop::config::enable-all-drops-gui-name} with lore "  &7(Kliknij, aby wykonac!)"
 
+on join:
+    while player is online:
+        if {drop::turbodrop::server} is set:
+            set {_ab} to {drop::messages::actionbar-turbodrop}
+            replace all "{TIME}" with convertTime({drop::turbodrop::server}) in {_ab}
+            set action bar of player to "%{_ab}%"
+        else if {drop::turbodrop::%player%} is set:
+            set {_ab} to {drop::messages::actionbar-turbodrop}
+            replace all "{TIME}" with convertTime({drop::turbodrop::%player%}) in {_ab}
+            set action bar of player to "%{_ab}%"
+        wait 1 real seconds
+
 on load:
     if yaml file "plugins/drop/config.yml" doesn't exist:
         load yaml "plugins/drop/config.yml" as "drop.config"
@@ -101,6 +135,8 @@ on load:
         set the comments of yaml node "drop-fill-gui-glass-pane" from "drop.config" to "Czy w GUI puste miejsca mają być wypełnione szybami?"
         set yaml value "drop-vip-multiplier" from "drop.config" to 1.25
         set the comments of yaml node "drop-vip-multiplier" from "drop.config" to "Ile procent ma dodatkowo osoba z permisją (drop.vip)?"
+        set yaml value "drop-turbodrop-multiplier" from "drop.config" to 5
+        set the comments of yaml node "drop-turbodrop-multiplier" from "drop.config" to "Ile procent ma dodatkowo osoba z turbodropem?"
         set yaml value "drop-display-amount" from "drop.config" to true
         set the comments of yaml node "drop-display-amount" from "drop.config" to "Czy ma wyświetlać liczbę wykopanego surowca?"
         set yaml value "fortune-1-min" from "drop.config" to 1
@@ -130,6 +166,10 @@ on load:
         load yaml "plugins/drop/messages.yml" as "drop.messages"
         set yaml value "drop-status-message" from "drop.messages" to "&8✦ &cDrop jest wyłączony!"
         set yaml value "drop-chat-message" from "drop.messages" to "&8✦ &7Wydobyłeś: {COLOR}x{AMOUNT} {LANG}&7!"
+        set yaml value "broadcast-turbodrop-all" from "drop.messages" to "&8✦ &7Administrator &2{PLAYER} &7włączył &2&lTURBODROP &7dla &2całego serwera &7na &2{TIME}&7!"
+        set yaml value "actionbar-turbodrop" from "drop.messages" to "&8✦ &7TurboDrop: &2&l{TIME} &8✦"
+        set yaml value "executor-turbodrop-give" from "drop.messages" to "&8✦ &7Dałeś &2&lTurboDrop &7graczowi &2{PLAYER}&7!"
+        set yaml value "victim-turbodrop-recive" from "drop.messages" to "&8✦ &7Otrzymałeś &2&lTurboDrop &7od gracza &2{PLAYER}&7!"
         save yaml "drop.messages"
         unload yaml "drop.messages"
     if yaml file "plugins/drop/drops.yml" doesn't exist:
@@ -236,11 +276,15 @@ on mine of stone:
         else if {drop::cache::cobblestone::%player%::status} is false:
             cancel drops
         loop {drop::drops::amount} times:
-            set {_chance} to {drop::drops::%loop-value%::chance}
-            if {drop::drops::%loop-value%::vipBoost} is true:
-                if player have permission "drop.vip":
-                    add {drop::config::drop-vip-multiplier} to {_chance}
             if {drop::cache::%loop-value%::%player%::status} is not set:
+                set {_chance} to {drop::drops::%loop-value%::chance}
+                if {drop::drops::%loop-value%::vipBoost} is true:
+                    if player have permission "drop.vip":
+                        add {drop::config::drop-vip-multiplier} to {_chance}
+                if {drop::turbodrop::server} is set:
+                    add {drop::config::drop-turbodrop-multiplier} to {_chance}
+                else if {drop::turbodrop::%player%} is set:
+                    add {drop::config::drop-turbodrop-multiplier} to {_chance}
                 chance of {_chance}%:
                     set {_i} to 1
                     if {drop::drops::%loop-value%::fortune} is true:
@@ -271,3 +315,61 @@ on mine of stone:
                         replace all "{AMOUNT}" with "%{_i}%" in {_msg}
                         replace all "{LANG}" with "%{_f}%" in {_msg}
                         send {_msg} to player
+
+command /turbodrop [<text>] [<text>]:
+    permission: turbodrop.usage
+    permission message: &8✦ &cNie masz dostępu do tej komendy!
+    trigger:
+        if arg-1 is not set:
+            send "&8✦ &7Użycie&8: &2/turbodrop <gracz/all> <czas, 15m-10s-50h>"
+            stop
+        if arg-2 is not set:
+            send "&8✦ &7Użycie&8: &2/turbodrop <gracz/all> <czas, 15m-10s-50h>"
+            stop
+        set {_time} to arg-2
+        replace all "s" and "m" and "h" with "" in {_time}
+        set {_time} to {_time} parsed as number
+        if arg-2 contains "s":
+            set {_time} to {_time}
+        else if arg-2 contain "m":
+            set {_time} to {_time} * 60
+        else if arg-2 contain "h":
+            set {_time} to {_time} * 3600
+        if arg-1 is "all":
+            set {drop::turbodrop::server} to {_time}
+            set {_msg} to {drop::messages::broadcast-turbodrop-all}
+            replace all "{PLAYER}" with player's name in {_msg}
+            replace all "{TIME}" with arg-2 in {_msg}
+            broadcast {_msg}
+            stop
+        else:
+            set {_p} to arg-1 parsed as player
+            if {_p} is offline:
+                send "&8✦ &cPodany gracz jest offline!"
+                stop
+            set {drop::turbodrop::%{_p}%} to {_time}
+            add {_p} to {drop::cache::turbodrop::list::*}
+            set {_msg} to {drop::messages::executor-turbodrop-give}
+            replace all "{PLAYER}" with arg-1 in {_msg}
+            replace all "{TIME}" with arg-2 in {_msg}
+            send {_msg} to player
+            set {_msg} to {drop::messages::victim-turbodrop-recive}
+            replace all "{PLAYER}" with player's name in {_msg}
+            replace all "{TIME}" with arg-2 in {_msg}
+            send {_msg} to {_p}
+            stop
+
+every 1 real seconds:
+    if {drop::turbodrop::server} is set:
+        if {drop::turbodrop::server} = 0:
+            clear {drop::turbodrop::server}
+        else if {drop::turbodrop::server} > 0:
+            remove 1 from {drop::turbodrop::server}
+    if {drop::cache::turbodrop::list::*} is set:
+        loop {drop::cache::turbodrop::list::*}:
+            if {drop::turbodrop::%loop-value%} is set:
+                if {drop::turbodrop::%loop-value%} = 0:
+                    remove loop-value from {drop::cache::turbodrop::list::*}
+                    clear {drop::turbodrop::%loop-value%}
+                else if {drop::turbodrop::%loop-value%} > 0:
+                    remove 1 from {drop::turbodrop::%loop-value%}
