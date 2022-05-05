@@ -108,6 +108,11 @@ function openDropGui(p: player, gui: boolean):
         add "  &8► &7Status: &a&l✔" to slot {_lastSlot} -3 of {_p}'s current inventory's lore
     else:
         add "  &8► &7Status: &c&l✘" to slot {_lastSlot} -3 of {_p}'s current inventory's lore
+    set slot {_lastSlot} -4 of {_p}'s current inventory to bottle o' enchanting named {drop::config::information-exp-gui-name}
+    set {_exp_lore} to {drop::config::information-exp-gui-lore}
+    replace all "{MIN}" with "%{drop::config::exp-drop-min}%" in {_exp_lore}
+    replace all "{MAX}" with "%{drop::config::exp-drop-max}%" in {_exp_lore}
+    add {_exp_lore} to slot {_lastSlot} -4 of {_p}'s current inventory's lore
     set slot {_lastSlot} -7 of {_p}'s current inventory to yellow clay named {drop::config::enable-only-drops-for-guild} with lore "  &7(Kliknij, aby wykonać!)"
     set slot {_lastSlot} -8 of {_p}'s current inventory to red clay named {drop::config::disable-all-drops-gui-name} with lore "  &7(Kliknij, aby wykonac!)"
     set slot {_lastSlot} -9 of {_p}'s current inventory to green clay named {drop::config::enable-all-drops-gui-name} with lore "  &7(Kliknij, aby wykonac!)"
@@ -117,11 +122,11 @@ on join:
         if {drop::turbodrop::server} is set:
             set {_ab} to {drop::messages::actionbar-turbodrop}
             replace all "{TIME}" with convertTime({drop::turbodrop::server}) in {_ab}
-            set action bar of player to "%{_ab}%"
+            send action bar "%{_ab}%" to player
         else if {drop::turbodrop::%player%} is set:
             set {_ab} to {drop::messages::actionbar-turbodrop}
             replace all "{TIME}" with convertTime({drop::turbodrop::%player%}) in {_ab}
-            set action bar of player to "%{_ab}%"
+            send action bar "%{_ab}%" to player
         wait 1 real seconds
 
 on load:
@@ -160,6 +165,11 @@ on load:
         set the comments of yaml node "enable-only-drops-for-guild" from "drop.config" to "Jak ma wyglądać włączanie przedmiotów tylko na gildie w GUI?"
         set yaml list "drops-for-guild" from "drop.config" to "1" and "2" and "3"
         set the comments of yaml node "drops-for-guild" from "drop.config" to "Jakie dropy mają być włączone w opcji ""tylko na gildie""?"
+        set yaml value "information-exp-gui-name" from "drop.config" to "&8✦ &5EXP z stone"
+        set yaml value "information-exp-gui-lore" from "drop.config" to "&8✦ &7Od &5{MIN} &7do &5{MAX} &7exp!"
+        set yaml value "exp-drop-min" from "drop.config" to 10
+        set yaml value "exp-drop-max" from "drop.config" to 15
+        set the comments of yaml node "exp-drop-min" from "drop.config" to "Od jakiej, do jakiej liczby ma dropić EXP z stone?"
         save yaml "drop.config"
         unload yaml "drop.config"
     if yaml file "plugins/drop/messages.yml" doesn't exist:
@@ -275,6 +285,9 @@ on mine of stone:
                     drop 1 of cobblestone at player
         else if {drop::cache::cobblestone::%player%::status} is false:
             cancel drops
+        set {_exp} to random integer between {drop::config::exp-drop-min} and {drop::config::exp-drop-max}
+        loop {_exp} times:
+            give 1 xp to player
         loop {drop::drops::amount} times:
             if {drop::cache::%loop-value%::%player%::status} is not set:
                 set {_chance} to {drop::drops::%loop-value%::chance}
@@ -326,6 +339,9 @@ command /turbodrop [<text>] [<text>]:
         if arg-2 is not set:
             send "&8✦ &7Użycie&8: &2/turbodrop <gracz/all> <czas, 15m-10s-50h>"
             stop
+        if arg-2 doesn't contain "s" or "m" or "h":
+            send "&8✦ &7Użycie&8: &2/turbodrop <gracz/all> <czas, 15m-10s-50h>"
+            stop
         set {_time} to arg-2
         replace all "s" and "m" and "h" with "" in {_time}
         set {_time} to {_time} parsed as number
@@ -346,6 +362,14 @@ command /turbodrop [<text>] [<text>]:
             set {_p} to arg-1 parsed as player
             if {_p} is offline:
                 send "&8✦ &cPodany gracz jest offline!"
+                stop
+            set {_return} to false
+            loop {drop::cache::turbodrop::list::*}:
+                if loop-value is {_p}:
+                    set {_return} to true
+                    stop loop
+            if {_return} is true:
+                send "&8✦ &cPodany gracz ma już turbodrop!"
                 stop
             set {drop::turbodrop::%{_p}%} to {_time}
             add {_p} to {drop::cache::turbodrop::list::*}
