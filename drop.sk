@@ -117,7 +117,18 @@ function openDropGui(p: player, gui: boolean):
     set slot {_lastSlot} -8 of {_p}'s current inventory to red clay named {drop::config::disable-all-drops-gui-name} with lore "  &7(Kliknij, aby wykonac!)"
     set slot {_lastSlot} -9 of {_p}'s current inventory to green clay named {drop::config::enable-all-drops-gui-name} with lore "  &7(Kliknij, aby wykonac!)"
 
+on first join:
+    if {drop::config::cobblestone-default-status} is false:
+        set {drop::cache::cobblestone::%player%::status} to false
+    if {drop::config::toEq-default-status} is false:
+        set {drop::cache::toEq::%player%::status} to false
+    if {drop::config::messages-default-status} is false:
+        set {drop::cache::messages::%player%::status} to false
+
 on join:
+    if {drop::config::join-enable-all-drops} is true:
+        loop {drop::drops::amount} times:
+            clear {drop::cache::%loop-value%::%player%::status}
     while player is online:
         if {drop::turbodrop::server} is set:
             set {_ab} to {drop::messages::actionbar-turbodrop}
@@ -170,6 +181,14 @@ on load:
         set yaml value "exp-drop-min" from "drop.config" to 10
         set yaml value "exp-drop-max" from "drop.config" to 15
         set the comments of yaml node "exp-drop-min" from "drop.config" to "Od jakiej, do jakiej liczby ma dropić EXP z stone?"
+        set yaml value "cobblestone-default-status" from "drop.config" to true
+        set the comments of yaml node "cobblestone-default-status" from "drop.config" to "Czy cobblestone ma być włączony/wyłączony od wejścia na serwer?"
+        set yaml value "toEq-default-status" from "drop.config" to true
+        set the comments of yaml node "toEq-default-status" from "drop.config" to "Czy drop do EQ ma być włączony/wyłączony od wejścia na serwer?"
+        set yaml value "toEq-default-status" from "drop.config" to true
+        set the comments of yaml node "messages-default-status" from "drop.config" to "Czy powiadomienia o dropię mają być włączone/wyłączone od wejścia na serwer?"
+        set yaml value "join-enable-all-drops" from "drop.config" to false
+        set the comments of yaml node "join-enable-all-drops" from "drop.config" to "Czy wszystkie dropy mają włączać się po wejściu na serwer? (niezależnie od tego czy wcześniej zostały wyłączone)"
         save yaml "drop.config"
         unload yaml "drop.config"
     if yaml file "plugins/drop/messages.yml" doesn't exist:
